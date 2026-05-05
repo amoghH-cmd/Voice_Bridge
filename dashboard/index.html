@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="AI VoiceBridge 1092 — Live agent dashboard for Karnataka Women and Child Helpline. Real-time call monitoring, ticket management, and escalation queue." />
+  <title>VoiceBridge 1092 · Agent Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!--  SIDEBAR                                                       -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-brand">
+    <div class="brand-logo">
+      <span class="brand-icon">📡</span>
+      <div>
+        <div class="brand-name">VoiceBridge</div>
+        <div class="brand-sub">1092 Karnataka Helpline</div>
+      </div>
+    </div>
+    <div class="ws-status" id="wsStatus">
+      <span class="ws-dot" id="wsDot"></span>
+      <span id="wsLabel">Connecting…</span>
+    </div>
+  </div>
+
+  <nav class="sidebar-nav">
+    <button class="nav-item active" id="navDashboard" onclick="showView('dashboard')">
+      <span class="nav-icon">⚡</span> Live Dashboard
+    </button>
+    <button class="nav-item" id="navTickets" onclick="showView('tickets')">
+      <span class="nav-icon">🎫</span> Tickets
+      <span class="nav-badge" id="openCount">0</span>
+    </button>
+    <button class="nav-item" id="navEscalations" onclick="showView('escalations')">
+      <span class="nav-icon">🚨</span> Escalations
+      <span class="nav-badge urgent" id="escCount">0</span>
+    </button>
+    <button class="nav-item" id="navAnalytics" onclick="showView('analytics')">
+      <span class="nav-icon">📊</span> Analytics
+    </button>
+    <button class="nav-item" id="navFlows" onclick="showView('flows')">
+      <span class="nav-icon">🗺️</span> Sample Flows
+    </button>
+  </nav>
+
+  <div class="sidebar-footer">
+    <div class="agent-card">
+      <div class="agent-avatar" id="agentAvatar">A</div>
+      <div>
+        <div class="agent-name" id="agentNameSidebar">Agent Name</div>
+        <div class="agent-role" id="agentRoleSidebar">Supervisor</div>
+      </div>
+    </div>
+    <div class="lang-chips">
+      <span class="lang-chip">KN</span>
+      <span class="lang-chip">HI</span>
+      <span class="lang-chip active">EN</span>
+    </div>
+  </div>
+</aside>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!--  MAIN CONTENT                                                  -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<main class="main-content">
+
+  <!-- ── TOP BAR ───────────────────────────────────────────────── -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <h1 class="page-title" id="pageTitle">Live Dashboard</h1>
+      <div class="breadcrumb" id="breadcrumb">Real-time call monitoring</div>
+    </div>
+    <div class="topbar-right">
+      <div class="live-clock" id="liveClock">--:--:--</div>
+      <button class="btn btn-ghost" onclick="simulateCall()">
+        <span>🎙️</span> Simulate Call
+      </button>
+      <button class="btn btn-danger-ghost" onclick="simulateEscalation()">
+        <span>🚨</span> Test Escalation
+      </button>
+    </div>
+  </header>
+
+  <!-- ══════════════════════════════════════════════════════════ -->
+  <!--  VIEW: DASHBOARD                                           -->
+  <!-- ══════════════════════════════════════════════════════════ -->
+  <div class="view" id="viewDashboard">
+
+    <!-- Stat cards -->
+    <div class="stats-grid">
+      <div class="stat-card" id="statActive">
+        <div class="stat-icon blue">📞</div>
+        <div class="stat-body">
+          <div class="stat-value" id="statActiveCalls">0</div>
+          <div class="stat-label">Active Calls</div>
+        </div>
+        <div class="stat-pulse" id="activePulse"></div>
+      </div>
+      <div class="stat-card" id="statOpen">
+        <div class="stat-icon yellow">🎫</div>
+        <div class="stat-body">
+          <div class="stat-value" id="statOpenTickets">0</div>
+          <div class="stat-label">Open Tickets</div>
+        </div>
+      </div>
+      <div class="stat-card danger" id="statEsc">
+        <div class="stat-icon red">🚨</div>
+        <div class="stat-body">
+          <div class="stat-value" id="statEscalated">0</div>
+          <div class="stat-label">Escalations</div>
+        </div>
+      </div>
+      <div class="stat-card" id="statConf">
+        <div class="stat-icon green">✅</div>
+        <div class="stat-body">
+          <div class="stat-value" id="statConfidence">0%</div>
+          <div class="stat-label">Avg Confidence</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Live feed + Active calls -->
+    <div class="two-col">
+      <!-- Live event feed -->
+      <section class="card">
+        <div class="card-header">
+          <h2 class="card-title">⚡ Live Event Feed</h2>
+          <button class="btn btn-ghost btn-sm" onclick="clearFeed()">Clear</button>
+        </div>
+        <div class="event-feed" id="eventFeed">
+          <div class="feed-empty">Waiting for events…</div>
+        </div>
+      </section>
+
+      <!-- Active calls panel -->
+      <section class="card">
+        <div class="card-header">
+          <h2 class="card-title">📞 Active Calls</h2>
+          <span class="badge live">LIVE</span>
+        </div>
+        <div class="active-calls" id="activeCalls">
+          <div class="feed-empty">No active calls</div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Recent tickets table -->
+    <section class="card mt-4">
+      <div class="card-header">
+        <h2 class="card-title">🎫 Recent Tickets</h2>
+        <button class="btn btn-ghost btn-sm" onclick="loadTickets()">Refresh</button>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table" id="recentTable">
+          <thead>
+            <tr>
+              <th>ID</th><th>Caller</th><th>Intent</th><th>Summary</th>
+              <th>Emotion</th><th>Lang</th><th>Conf</th><th>Status</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="recentTicketRows"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════ -->
+  <!--  VIEW: TICKETS                                             -->
+  <!-- ══════════════════════════════════════════════════════════ -->
+  <div class="view hidden" id="viewTickets">
+    <div class="filter-bar">
+      <select class="filter-select" id="filterStatus" onchange="filterTickets()">
+        <option value="">All Status</option>
+        <option value="OPEN">Open</option>
+        <option value="IN_PROGRESS">In Progress</option>
+        <option value="ESCALATED">Escalated</option>
+        <option value="RESOLVED">Resolved</option>
+      </select>
+      <select class="filter-select" id="filterEmotion" onchange="filterTickets()">
+        <option value="">All Emotions</option>
+        <option value="LOW">Low</option>
+        <option value="MEDIUM">Medium</option>
+        <option value="HIGH">High</option>
+        <option value="PANIC">Panic</option>
+      </select>
+      <select class="filter-select" id="filterLang" onchange="filterTickets()">
+        <option value="">All Languages</option>
+        <option value="kn">Kannada</option>
+        <option value="hi">Hindi</option>
+        <option value="en">English</option>
+        <option value="kanglish">Kanglish</option>
+        <option value="hinglish">Hinglish</option>
+      </select>
+      <input class="filter-input" id="filterDistrict" placeholder="District…" oninput="filterTickets()" />
+    </div>
+    <section class="card">
+      <div class="table-wrap">
+        <table class="data-table" id="ticketTable">
+          <thead>
+            <tr>
+              <th>Ticket ID</th><th>Time</th><th>Phone</th><th>Intent</th>
+              <th>Summary</th><th>Emotion</th><th>District</th><th>Conf</th>
+              <th>Status</th><th>Agent</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="ticketRows"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════ -->
+  <!--  VIEW: ESCALATIONS                                         -->
+  <!-- ══════════════════════════════════════════════════════════ -->
+  <div class="view hidden" id="viewEscalations">
+    <div class="escalation-alert" id="escAlert">
+      <span class="esc-icon">🚨</span>
+      <div>
+        <strong>Escalation Queue</strong>
+        <p>High-emotion or unresolvable calls requiring immediate human intervention.</p>
+      </div>
+    </div>
+    <div class="escalation-list" id="escalationList"></div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════ -->
+  <!--  VIEW: ANALYTICS                                           -->
+  <!-- ══════════════════════════════════════════════════════════ -->
+  <div class="view hidden" id="viewAnalytics">
+    <div class="analytics-grid">
+      <div class="card">
+        <div class="card-header"><h2 class="card-title">Intent Distribution</h2></div>
+        <div class="chart-area" id="intentChart"></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h2 class="card-title">Language Distribution</h2></div>
+        <div class="chart-area" id="langChart"></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h2 class="card-title">Emotion Breakdown</h2></div>
+        <div class="chart-area" id="emotionChart"></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h2 class="card-title">Confirmation Outcomes</h2></div>
+        <div class="chart-area" id="confirmChart"></div>
+      </div>
+    </div>
+    <!-- Pipeline architecture diagram -->
+    <section class="card mt-4">
+      <div class="card-header"><h2 class="card-title">🗺️ System Architecture</h2></div>
+      <div class="arch-diagram" id="archDiagram"></div>
+    </section>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════ -->
+  <!--  VIEW: SAMPLE FLOWS (Section 10)                           -->
+  <!-- ══════════════════════════════════════════════════════════ -->
+  <div class="view hidden" id="viewFlows">
+    <div class="flows-grid" id="flowsGrid"></div>
+  </div>
+
+</main>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!--  TICKET DETAIL MODAL                                           -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div class="modal-backdrop hidden" id="ticketModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 class="modal-title" id="modalTitle">Ticket Detail</h2>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal()">Close</button>
+      <button class="btn btn-warning" onclick="escalateCurrentTicket()">🚨 Escalate</button>
+      <button class="btn btn-success" onclick="resolveCurrentTicket()">✅ Resolve</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!--  TOAST NOTIFICATIONS                                           -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
