@@ -38,8 +38,16 @@ app.get('/api/tickets', async (req, res) => {
 app.post('/api/calls/voice', upload.single('audio'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "No audio file uploaded" });
 
+  const call_id = req.body.call_id || "voice-call-" + Math.floor(Math.random() * 1000);
+  let sessionHistory = [];
   try {
-    console.log("Received voice audio chunk...");
+    if (req.body.history) sessionHistory = JSON.parse(req.body.history);
+  } catch (e) {
+    console.error("Could not parse history", e);
+  }
+
+  try {
+    console.log(`Received voice audio chunk for call ${call_id}...`);
     
     // Rename the file to include .webm extension so Groq STT can recognize the format
     const fs = require('fs');
@@ -51,12 +59,12 @@ app.post('/api/calls/voice', upload.single('audio'), async (req, res) => {
     const transcript = await transcribeAudio(newFilePath);
     console.log("Transcription:", transcript);
 
-    // 2. LLM: Send to Claude
-    const analysis = await analyzeTranscript(transcript, 'en');
+    // 2. LLM: Send to Groq Llama 3 with session history
+    const analysis = await analyzeTranscript(transcript, 'en', sessionHistory);
 
     // 3. Format for Supabase
     const newTicket = {
-      call_id: "voice-call-" + Math.floor(Math.random() * 1000),
+      call_id: call_id,
       intent_category: analysis.intent_category,
       intent_subtype: analysis.intent_subtype,
       summary: analysis.summary,
@@ -70,16 +78,25 @@ app.post('/api/calls/voice', upload.single('audio'), async (req, res) => {
       status: analysis.needs_escalation ? 'ESCALATED' : 'OPEN'
     };
 
-    // 4. Insert into Supabase
-    const { data, error } = await supabase.from('tickets').insert([newTicket]).select();
+    // 4. Update or Insert into Supabase
+    let ticketData;
+    const { data: existing } = await supabase.from('tickets').select('id').eq('call_id', call_id).maybeSingle();
     
-    if (error) throw error;
+    if (existing) {
+      const { data, error } = await supabase.from('tickets').update(newTicket).eq('id', existing.id).select();
+      if (error) throw error;
+      ticketData = data[0];
+    } else {
+      const { data, error } = await supabase.from('tickets').insert([newTicket]).select();
+      if (error) throw error;
+      ticketData = data[0];
+    }
     
     res.json({
       success: true,
-      ticket: data[0],
+      ticket: ticketData,
       transcript: transcript,
-      ai_confirmation: analysis.confirmation_sentence
+      ai_confirmation: analysis.helpline_reply
     });
 
   } catch (error) {
@@ -141,6 +158,45 @@ app.post('/api/calls/simulate', async (req, res) => {
   } catch (error) {
     console.error("Simulation error:", error);
     res.status(500).json({ error: "Failed to process call pipeline" });
+  }
+});
+
+// TTS Proxy Route (ElevenLabs API)
+app.get('/api/tts', async (req, res) => {
+  const { text } = req.query;
+  if (!text) return res.status(400).json({ error: "Text required" });
+  
+  try {
+    // Sarah - Mature, Reassuring, Confident
+    const voiceId = "EXAVITQu4vr4xnSDxMaL"; 
+    const url = `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=mp3_44100_128`;
+    
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 
+        'xi-api-key': process.env.ELEVENLABS_API_KEY,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        text: text,
+        model_id: "eleven_turbo_v2_5",
+        voice_settings: {
+          stability: 0.5,
+          similarity_boost: 0.75
+        }
+      })
+    });
+    
+    if (!response.ok) throw new Error("ElevenLabs TTS fetch failed: " + await response.text());
+    
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    
+    res.set('Content-Type', 'audio/mpeg');
+    res.send(buffer);
+  } catch (error) {
+    console.error("TTS Proxy error:", error);
+    res.status(500).json({ error: "Failed to fetch TTS from ElevenLabs" });
   }
 });
 

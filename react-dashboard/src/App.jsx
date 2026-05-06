@@ -66,6 +66,10 @@ export default function App() {
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
 
+  // Session State
+  const [currentCallId, setCurrentCallId] = useState(null);
+  const [conversationHistory, setConversationHistory] = useState([]);
+
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -79,6 +83,11 @@ export default function App() {
 
       mediaRecorder.onstop = async () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        // Prevent sending empty or extremely short audio which causes Groq 400 errors
+        if (audioBlob.size < 1000) {
+          console.warn("Audio too short, skipping...");
+          return;
+        }
         await sendVoiceToBackend(audioBlob);
       };
 
@@ -99,12 +108,16 @@ export default function App() {
   };
 
   const sendVoiceToBackend = async (audioBlob) => {
-    const callId = "voice-" + Math.floor(Math.random()*1000);
+    const callId = currentCallId || "voice-" + Math.floor(Math.random()*1000);
+    if (!currentCallId) setCurrentCallId(callId);
+
     addFeedEvent('call_status', { status: 'PROCESSING_AUDIO', call_id: callId });
-    setActiveCalls(prev => [...prev, callId]);
+    setActiveCalls(prev => prev.includes(callId) ? prev : [...prev, callId]);
     
     const formData = new FormData();
     formData.append('audio', audioBlob, 'recording.webm');
+    formData.append('call_id', callId);
+    formData.append('history', JSON.stringify(conversationHistory));
     
     try {
       const res = await fetch('http://localhost:8000/api/calls/voice', {
@@ -113,16 +126,57 @@ export default function App() {
       });
       
       const data = await res.json();
-      if (data.success && 'speechSynthesis' in window) {
-        addFeedEvent('call_status', { status: 'TRANSCRIPT', call_id: callId, transcript: data.transcript });
-        const msg = new SpeechSynthesisUtterance(data.ai_confirmation);
-        window.speechSynthesis.speak(msg);
+      if (data.success) {
+        addFeedEvent('call_status', { 
+          status: 'TRANSCRIPT', 
+          call_id: callId, 
+          transcript: data.transcript,
+          ai_reply: data.ai_confirmation 
+        });
+        
+        setConversationHistory(prev => [
+          ...prev,
+          { role: 'user', text: data.transcript },
+          { role: 'assistant', text: data.ai_confirmation }
+        ]);
+
+        // Play audio using our Backend TTS Proxy (Bypasses Brave Shields)
+        const playCloudTTS = async (text) => {
+          // Split into sentences to avoid limit of Google TTS
+          const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
+          for (let sentence of sentences) {
+            if (!sentence.trim()) continue;
+            const url = `http://localhost:8000/api/tts?text=${encodeURIComponent(sentence.trim())}`;
+            const audio = new Audio(url);
+            await new Promise(resolve => {
+              audio.onended = resolve;
+              audio.onerror = resolve;
+              audio.play().catch(err => {
+                console.error("Audio playback failed (Brave autoplay blocker?):", err);
+                resolve();
+              });
+            });
+          }
+        };
+
+        playCloudTTS(data.ai_confirmation);
+      } else {
+        console.error("Backend failed:", data.error);
+        addFeedEvent('call_status', { status: 'ERROR', call_id: callId, transcript: "Failed to process audio." });
       }
     } catch (e) {
       console.error("Failed to process voice:", e);
+      addFeedEvent('call_status', { status: 'ERROR', call_id: callId, transcript: "Network Error" });
     } finally {
-      setActiveCalls(prev => prev.filter(id => id !== callId));
+      // Keep in activeCalls since session is ongoing, but maybe remove processing status
     }
+  };
+
+  const endCallSession = () => {
+    setActiveCalls(prev => prev.filter(id => id !== currentCallId));
+    setCurrentCallId(null);
+    setConversationHistory([]);
+    addFeedEvent('call_status', { status: 'CALL_ENDED', call_id: currentCallId });
   };
 
   return (
@@ -176,8 +230,17 @@ export default function App() {
             <h1 className="page-title">Live Dashboard</h1>
             <div className="breadcrumb">Real-time call monitoring</div>
           </div>
-          <div className="topbar-right">
+          <div className="topbar-right" style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
             <div className="live-clock">{currentTime}</div>
+            {currentCallId && (
+              <button 
+                className="btn btn-ghost" 
+                onClick={endCallSession}
+                style={{ padding: '0.75rem 1.5rem', border: '1px solid #ef4444', color: '#ef4444' }}
+              >
+                <span>End Call</span>
+              </button>
+            )}
             <button 
               className={`btn ${isRecording ? 'btn-danger' : 'btn-ghost'}`} 
               onMouseDown={startRecording} 
@@ -245,7 +308,8 @@ export default function App() {
                         ) : (
                           <>
                             <div className="feed-text"><strong>Call Status:</strong> {ev.data.status} ({ev.data.call_id})</div>
-                            {ev.data.transcript && <div className="feed-text" style={{fontStyle:'italic', color:'#94a3b8'}}>"{ev.data.transcript}"</div>}
+                            {ev.data.transcript && <div className="feed-text" style={{fontStyle:'italic', color:'#94a3b8', marginTop: '4px'}}>🗣️ You: "{ev.data.transcript}"</div>}
+                            {ev.data.ai_reply && <div className="feed-text" style={{color:'#38bdf8', marginTop: '4px'}}>🤖 AI: "{ev.data.ai_reply}"</div>}
                           </>
                         )}
                         <div className="feed-time">{ev.timestamp.toLocaleTimeString()}</div>
