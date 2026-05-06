@@ -226,19 +226,51 @@ function openTicketModal(id) {
   if(!t) return;
   currentModalTicket = id;
   
+  let urgencyHtml = '';
+  if (t.urgency_cues && t.urgency_cues.length > 0) {
+    urgencyHtml = t.urgency_cues.map(c => `<span class="badge badge-emotion-HIGH">${c}</span>`).join(' ');
+  } else {
+    urgencyHtml = '<span class="detail-value">-</span>';
+  }
+
   const body = document.getElementById('modalBody');
   body.innerHTML = `
     <div class="detail-grid">
-      <div class="detail-field"><span class="detail-label">Intent</span><span class="detail-value badge">${t.intent_category}</span></div>
-      <div class="detail-field"><span class="detail-label">Subtype</span><span class="detail-value">${t.intent_subtype || '-'}</span></div>
+      <div class="detail-field">
+        <span class="detail-label">Intent Category</span>
+        <input type="text" id="editIntent" class="filter-input" style="width:100%" value="${t.intent_category || ''}" />
+      </div>
+      <div class="detail-field">
+        <span class="detail-label">Subtype</span>
+        <input type="text" id="editSubtype" class="filter-input" style="width:100%" value="${t.intent_subtype || ''}" />
+      </div>
       
-      <div class="detail-field detail-full"><span class="detail-label">Summary</span><div class="detail-summary">${t.summary}</div></div>
+      <div class="detail-field detail-full">
+        <span class="detail-label">Summary (Editable)</span>
+        <textarea id="editSummary" class="filter-input" style="width:100%; height:60px;">${t.summary || ''}</textarea>
+      </div>
       
       <div class="detail-field"><span class="detail-label">Emotion</span><span class="detail-value badge badge-emotion-${t.emotion}">${t.emotion}</span></div>
       <div class="detail-field"><span class="detail-label">Language</span><span class="detail-value badge badge-lang">${t.language}</span></div>
       
-      <div class="detail-field"><span class="detail-label">Location</span><span class="detail-value">${t.location_raw || '-'}</span></div>
-      <div class="detail-field"><span class="detail-label">District</span><span class="detail-value">${t.district || '-'}</span></div>
+      <div class="detail-field">
+        <span class="detail-label">Location</span>
+        <input type="text" id="editLocation" class="filter-input" style="width:100%" value="${t.location_raw || ''}" />
+      </div>
+      <div class="detail-field">
+        <span class="detail-label">District</span>
+        <input type="text" id="editDistrict" class="filter-input" style="width:100%" value="${t.district || ''}" />
+      </div>
+
+      <div class="detail-field detail-full">
+        <span class="detail-label">Cultural & Dialect Context</span>
+        <div class="detail-summary" style="background:#f8fafc;">${t.cultural_context || 'None specified.'}</div>
+      </div>
+
+      <div class="detail-field detail-full">
+        <span class="detail-label">Urgency Cues</span>
+        <div>${urgencyHtml}</div>
+      </div>
     </div>
   `;
   document.getElementById('ticketModal').classList.remove('hidden');
@@ -248,6 +280,35 @@ function closeModal() {
   document.getElementById('ticketModal').classList.add('hidden');
 }
 
+async function saveTicketEdits() {
+  if (!currentModalTicket) return;
+  const data = {
+    intent_category: document.getElementById('editIntent').value,
+    intent_subtype: document.getElementById('editSubtype').value,
+    summary: document.getElementById('editSummary').value,
+    location_raw: document.getElementById('editLocation').value,
+    district: document.getElementById('editDistrict').value,
+  };
+
+  try {
+    const res = await fetch(`${API_BASE}/tickets/${currentModalTicket}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    if (res.ok) {
+      showToast('Corrections saved to system.', 'success');
+      loadTickets(); // refresh table
+      closeModal();
+    } else {
+      showToast('Failed to save edits.', 'error');
+    }
+  } catch(e) {
+    console.error(e);
+    showToast('Network error saving edits.', 'error');
+  }
+}
+
 // ── Mock Events (Simulate call) ─────────────────────────────────
 function simulateCall() {
   handleWsEvent({
@@ -255,6 +316,12 @@ function simulateCall() {
     timestamp: new Date().toISOString(),
     data: { status: "ACTIVE", call_id: "mock-"+Math.floor(Math.random()*1000) }
   });
+  // TTS for voice-to-voice simulation
+  if ('speechSynthesis' in window) {
+    const msg = new SpeechSynthesisUtterance("I understand your situation. Please hold while I create an urgent ticket.");
+    window.speechSynthesis.speak(msg);
+  }
+
   setTimeout(() => {
     handleWsEvent({
       event: "new_ticket",
@@ -264,7 +331,9 @@ function simulateCall() {
         summary: "Caller reporting physical abuse by husband. Needs immediate police help.",
         language: "kanglish",
         emotion: "HIGH",
-        phone_number: "+919876543210"
+        phone_number: "+919876543210",
+        cultural_context: "Uses North Karnataka slang for 'abuse', indicating rural context.",
+        urgency_cues: ["distress", "fear", "urgency"]
       }
     });
   }, 2000);

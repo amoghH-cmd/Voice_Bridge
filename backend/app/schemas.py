@@ -47,6 +47,8 @@ class LLMAnalysis(BaseModel):
     confirmation_sentence: str              # AI restates issue for user to confirm
     needs_escalation: bool = False
     escalation_reason: Optional[str] = None
+    cultural_context: Optional[str] = None
+    urgency_cues: Optional[List[str]] = Field(default_factory=list)
 
 
 # ── Confirmation Schemas ──────────────────────────────────────────
@@ -79,6 +81,8 @@ class TicketCreate(BaseModel):
     caller_name: Optional[str] = None
     caller_age: Optional[int] = None
     caller_gender: Optional[str] = None
+    cultural_context: Optional[str] = None
+    urgency_cues: Optional[List[str]] = Field(default_factory=list)
     llm_output: Optional[Dict[str, Any]] = None
 
 
@@ -92,6 +96,7 @@ class TicketUpdate(BaseModel):
     resolution: Optional[str] = None
     assigned_agent: Optional[str] = None
     district: Optional[str] = None
+    location_raw: Optional[str] = None
     caller_name: Optional[str] = None
 
 
@@ -111,6 +116,8 @@ class TicketResponse(BaseModel):
     caller_name: Optional[str]
     assigned_agent: Optional[str]
     agent_notes: Optional[str]
+    cultural_context: Optional[str]
+    urgency_cues: Optional[List[str]]
 
     class Config:
         from_attributes = True

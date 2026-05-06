@@ -25,6 +25,8 @@ STRICT RULES:
 5. Summaries must be ≤ 60 words, factual, and neutral in tone.
 6. If emotion is HIGH or PANIC, always set needs_escalation = true.
 7. If confidence < 40, always set needs_escalation = true.
+8. Analyze the caller's dialect, specific local phrasing, and cultural context. Note this in 'cultural_context'.
+9. Identify any explicit urgency cues (e.g., "distress", "urgency", "anger", "fear", "confusion", "neutral") and return them in the 'urgency_cues' list.
 
 INTENT CATEGORIES (use exact string):
   women_safety | child_safety | domestic_violence | medical |
@@ -55,7 +57,9 @@ OUTPUT SCHEMA (all fields required unless marked optional):
   "landmark": "<string or null>",
   "confirmation_sentence": "<string — restate the issue to caller in their language>",
   "needs_escalation": <boolean>,
-  "escalation_reason": "<string or null>"
+  "escalation_reason": "<string or null>",
+  "cultural_context": "<string or null — notes on dialect or cultural phrasing>",
+  "urgency_cues": ["<string — e.g., 'fear', 'anger', 'confusion'>"]
 }
 """
 

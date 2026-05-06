@@ -1,164 +1,108 @@
 # 🎙️ AI VoiceBridge 1092 — Karnataka Helpline
 
-> A production-grade, multilingual, confirmation-first voice AI helpline system designed for Karnataka's 1092 Women and Child Helpline.
+> A production-grade, multilingual, real-time voice AI helpline system designed for Karnataka's 1092 Women and Child Helpline.
 
-![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688.svg)
-![WebSockets](https://img.shields.io/badge/WebSockets-Real--Time-yellow.svg)
-![VanillaJS](https://img.shields.io/badge/Dashboard-Vanilla_JS-f7df1e.svg)
-![OpenAI Whisper](https://img.shields.io/badge/STT-Whisper_v3-black.svg)
-![Claude](https://img.shields.io/badge/LLM-Claude_3.5_Sonnet-D97757.svg)
+![Node.js](https://img.shields.io/badge/Node.js-Backend-339933.svg)
+![React](https://img.shields.io/badge/React-Dashboard-61DAFB.svg)
+![Supabase](https://img.shields.io/badge/Supabase-Realtime_DB-3ECF8E.svg)
+![Groq](https://img.shields.io/badge/AI_Engine-Groq_LPUs-f55036.svg)
 
 ---
 
 ## 🌟 Overview
 
-AI VoiceBridge 1092 is a cutting-edge voice helpline architecture specifically tailored to assist distressed callers. It supports multiple languages (Kannada, Hindi, English) seamlessly, capturing live audio, transcribing it, analyzing distress patterns and intents using Large Language Models, and confirming details before automatically passing structured tickets to human agents in real-time.
+AI VoiceBridge 1092 is a cutting-edge voice helpline architecture tailored to assist distressed callers. It supports multiple languages (Kannada, Hindi, English) seamlessly, capturing live microphone audio from the browser, transcribing it instantly, analyzing distress patterns and cultural context using Large Language Models, and auto-generating structured tickets on a real-time React dashboard for human operators.
 
 ---
 
 ## 🚀 Key Features
 
-- **🗣️ Multilingual Support**: Handles Kannada, Hindi, and English interchangeably, including mixed-dialect conversations.
-- **⚡ Real-Time Processing**: Streaming audio chunks are transcribed continuously and analyzed to reduce latency.
-- **🧠 Advanced Intent Extraction**: Powered by Claude 3.5 Sonnet to accurately capture caller intent, location, emergency severity, and emotional state.
-- **✅ Confirmation Engine**: Unique state machine with `YES` / `NO` / `PARTIAL` branching, retries, and escalation thresholds to ensure data accuracy before creating a ticket.
-- **🖥️ Live Agent Dashboard**: A responsive Vanilla JS/CSS/HTML dashboard connected via WebSockets, allowing human operators to monitor active calls and view structured incident reports in real-time.
+- **🎤 Live Voice-to-Voice Loop**: Speak directly into the browser microphone. The system transcribes your voice, analyzes the intent, and speaks back the confirmation sentence aloud using the Web Speech API.
+- **🗣️ Multilingual & Dialect Aware**: Handles Kannada, Hindi, and English interchangeably (including Kanglish/Hinglish), and explicitly identifies cultural context and regional phrasing.
+- **⚡ Blazing Fast AI via Groq**: Powered by Groq's LPUs, utilizing **Whisper-Large-v3** for transcription and **Llama-3.3-70B-Versatile** for instantaneous intent and emotion extraction.
+- **🚨 Automated Urgency Detection**: Explicitly extracts emotional cues (distress, fear, panic) and flags high-urgency calls automatically.
+- **🖥️ Real-Time React Dashboard**: A beautiful, dark-mode React UI that uses Supabase WebSockets to instantly display new tickets and active calls as they happen.
+- **👩‍💻 Human-in-the-Loop**: Agents can edit AI-generated intents, summaries, and locations on the dashboard, proving a "learning from feedback" mechanism.
 
 ---
 
-## 🏗️ System Architecture (5-Layer Pipeline)
+## 🏗️ System Architecture
 
-```mermaid
-graph TD;
-    A[Caller] -->|Voice| B(Telephony: Exotel/Twilio)
-    B -->|WebSocket Audio Stream| C[FastAPI Backend]
-    
-    subgraph AI Pipeline
-    C -->|Audio Chunks| D[STT: OpenAI Whisper v3]
-    D -->|Text| E[LLM: Claude 3.5 Sonnet]
-    E -->|Intent, Emotion, Details| F{Confirmation Engine}
-    F -->|Clarification needed| B
-    F -->|Confirmed| G[(Database: SQLite)]
-    end
-    
-    G -->|Real-time Updates| H[Agent Dashboard via WebSockets]
-    H -->|Human Intervention| A
-```
-
-1. **Telephony**: Inbound calls are routed via Twilio/Exotel Webhooks directly to a WebSocket Audio Stream.
-2. **STT (Speech-to-Text)**: OpenAI Whisper v3 API parses incoming streaming chunks accurately.
-3. **LLM Analysis**: Claude 3.5 Sonnet processes full intent tracking, summarization, structured extraction, and emotional tone mapping.
-4. **Confirmation Engine**: A reliable state machine validating caller details.
-5. **Output**: Synchronized delivery to a Live Agent Dashboard via WebSockets.
+1. **Frontend (React)**: The agent clicks "Hold to Speak", records audio via the `MediaRecorder` API, and POSTs the `.webm` file to the Node backend.
+2. **STT (Speech-to-Text)**: Node.js sends the audio file to **Groq's Whisper API**.
+3. **LLM Analysis**: The text is sent to **Groq's Llama 3.3 70B** with a strict system prompt to extract JSON data (intent, summary, emotion, dialect notes) and generate a confirmation sentence in the caller's language.
+4. **Database (Supabase)**: The structured JSON ticket is inserted into a Supabase PostgreSQL database.
+5. **Real-Time Update**: Supabase broadcasts an `INSERT` event over WebSockets to the React frontend.
+6. **Voice Output**: The React frontend adds the ticket to the screen and uses the browser's Text-to-Speech API to literally speak the AI's confirmation to the user.
 
 ---
 
 ## 🛠️ Technology Stack
 
-**Backend:**
-- Python 3.10+
-- FastAPI
-- WebSockets (Real-time communication)
-- SQLAlchemy + aioSQLite (Async Database)
-- PyJWT & Bcrypt (Security)
+**Backend (`node-backend/`)**
+- Node.js & Express.js
+- Multer (File Uploads)
+- Groq Node SDK
+- Supabase JS SDK
 
-**Frontend (Dashboard):**
-- HTML5, CSS3, Vanilla JavaScript
+**Frontend (`react-dashboard/`)**
+- React.js (Vite)
+- Vanilla CSS (Custom dark theme styling)
+- Web Speech API (TTS)
+- MediaRecorder API (Microphone)
 
-**AI & ML:**
-- OpenAI API (Whisper v3 for STT)
-- Anthropic API (Claude 3.5 Sonnet for LLM)
+**Database & Realtime**
+- Supabase (PostgreSQL + Realtime Subscriptions)
 
----
-
-## 📂 Project Structure
-
-```text
-ai_bharat/
-├── backend/
-│   ├── main.py                 # FastAPI Application Entry Point
-│   ├── app/
-│   │   ├── config.py           # Environment configurations
-│   │   ├── database.py         # SQLAlchemy Async Models
-│   │   ├── schemas.py          # Pydantic validation models
-│   │   ├── prompts.py          # Multilingual LLM Prompts & Templates
-│   │   ├── routes/             # REST APIs (calls, webhooks, tickets, agents)
-│   │   ├── services/           # Core AI Logic (Pipeline, STT, LLM, Confirmation)
-│   │   └── websocket/          # Dashboard WS PubSub manager
-│   ├── voicebridge.db          # SQLite Database
-│   └── venv/                   # Python Virtual Environment
-├── dashboard/
-│   ├── index.html              # Agent View Layout
-│   ├── style.css               # Styling and Layout properties
-│   └── app.js                  # WebSocket integration & dynamic UI updates
-├── .gitignore
-└── README.md                   # Project Documentation
-```
+**AI Models (Hosted on Groq)**
+- `whisper-large-v3` (Transcription)
+- `llama-3.3-70b-versatile` (Intelligence & Reasoning)
 
 ---
 
 ## ⚙️ Setup & Installation
 
 ### 1. Prerequisites
-- Python 3.10 or higher installed.
-- API keys for OpenAI and Anthropic.
-- (Optional) Twilio/Exotel Account for actual telephony testing.
+- Node.js (v18+)
+- A free account on [Supabase](https://supabase.com)
+- A free API key from [Groq](https://console.groq.com)
 
 ### 2. Environment Variables
-Create a `.env` file in the `backend/` directory:
+You need two `.env` files.
 
+**In `node-backend/.env`:**
 ```ini
-# API Keys
-OPENAI_API_KEY=sk-...
-ANTHROPIC_API_KEY=sk-ant-...
-
-# Telephony (If connected)
-TWILIO_ACCOUNT_SID=your_twilio_sid
-TWILIO_AUTH_TOKEN=your_twilio_token
-
-# App Settings
-ALLOWED_ORIGINS=http://localhost:8000,http://127.0.0.1:8000
+SUPABASE_URL=your_supabase_project_url
+SUPABASE_SERVICE_KEY=your_supabase_secret_key
+GROQ_API_KEY=gsk_your_groq_key
+PORT=8000
 ```
 
-### 3. Backend Installation
-Open a terminal and navigate to the `backend/` directory:
+**In `react-dashboard/.env`:**
+```ini
+VITE_SUPABASE_URL=your_supabase_project_url
+VITE_SUPABASE_ANON_KEY=your_supabase_publishable_key
+```
 
+### 3. Database Setup
+Run the SQL found in `supabase_schema.sql` inside your Supabase SQL Editor. This will create the `tickets` and `calls` tables and enable Realtime tracking.
+
+### 4. Installation & Running
+
+Open two terminal windows.
+
+**Terminal 1 (Backend):**
 ```bash
-cd backend
-
-# Create virtual environment
-python -m venv venv
-
-# Activate virtual environment
-# On Windows:
-venv\Scripts\activate
-# On Mac/Linux:
-# source venv/bin/activate
-
-# Install dependencies
-pip install fastapi uvicorn websockets httpx sqlalchemy aiosqlite pydantic pydantic-settings anthropic openai bcrypt pyjwt python-multipart
+cd node-backend
+npm install
+npm start
 ```
 
----
-
-## 🏃‍♂️ Running the Application
-
-1. Make sure you are in the `backend` directory with your virtual environment activated.
-2. Start the FastAPI server:
-
+**Terminal 2 (Frontend):**
 ```bash
-python main.py
+cd react-dashboard
+npm install
+npm run dev
 ```
 
-3. **Access the application:**
-   - **Backend API Docs**: [http://localhost:8000/api/docs](http://localhost:8000/api/docs)
-   - **Agent Dashboard**: [http://localhost:8000/dashboard](http://localhost:8000/dashboard)
-
----
-
-## 🔮 Future Development / Roadmap
-- **Voice Synthesis (TTS)**: Allow the bot to speak back the clarifications generated by the confirmation engine to the user.
-- **Advanced Telephony Integration**: Deepen support for complex IVR routing via Exotel/Twilio.
-- **Analytics Dashboard**: Weekly/Monthly insights on caller demographics, locations, and frequent emergency types.
-- **Multi-Agent Load Balancing**: Distribute complex calls dynamically to available human agents.
+Navigate to `http://localhost:5173` in your browser. Click the **🎙️ Hold to Speak** button, talk into your microphone, and watch the system work in real-time!
