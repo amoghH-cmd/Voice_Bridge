@@ -96,7 +96,14 @@ app.post('/api/calls/voice', upload.single('audio'), async (req, res) => {
       success: true,
       ticket: ticketData,
       transcript: transcript,
-      ai_confirmation: analysis.helpline_reply
+      ai_confirmation: analysis.helpline_reply,
+      // Location + dispatch info for real-time map updates
+      location_raw: analysis.location_raw || null,
+      landmark: analysis.landmark || null,
+      district: analysis.district || null,
+      dispatch_type: analysis.dispatch_type || 'none',
+      needs_escalation: analysis.needs_escalation || false,
+      language: analysis.language_detected || 'en',
     });
 
   } catch (error) {
@@ -195,13 +202,57 @@ app.get('/api/tts', async (req, res) => {
     res.set('Content-Type', 'audio/mpeg');
     res.send(buffer);
   } catch (error) {
-    console.error("TTS Proxy error:", error);
-    res.status(500).json({ error: "Failed to fetch TTS from ElevenLabs" });
+    console.error("TTS Proxy error:", error.message);
+    res.status(500).json({ error: "Failed to fetch TTS from ElevenLabs: " + error.message });
   }
+});
+
+// ── Emergency Dispatch API ────────────────────────────────────────────────────
+const EMERGENCY_SERVICES = {
+  fire:      [{name:'Shivajinagar Fire Station',lat:12.9862,lng:77.5996},{name:'Jayanagar Fire Station',lat:12.9250,lng:77.5938},{name:'Rajajinagar Fire Station',lat:12.9900,lng:77.5520}],
+  ambulance: [{name:'Victoria Hospital',lat:12.9591,lng:77.5790},{name:'Bowring Hospital',lat:12.9767,lng:77.6064},{name:'MS Ramaiah Hospital',lat:13.0099,lng:77.5536}],
+  police:    [{name:'Cubbon Park Police',lat:12.9776,lng:77.5993},{name:'High Grounds Police',lat:12.9882,lng:77.5860},{name:'Koramangala Police',lat:12.9279,lng:77.6271}],
+  rescue:    [{name:'SDRF Karnataka HQ',lat:12.9716,lng:77.5236},{name:'Civil Defence Bangalore',lat:12.9640,lng:77.5810}],
+};
+
+function haversineKm(lat1,lng1,lat2,lng2){
+  const R=6371,r=d=>d*Math.PI/180;
+  const dLat=r(lat2-lat1),dLng=r(lng2-lng1);
+  return R*2*Math.asin(Math.sqrt(Math.sin(dLat/2)**2+Math.cos(r(lat1))*Math.cos(r(lat2))*Math.sin(dLng/2)**2));
+}
+
+app.post('/api/dispatch', (req, res) => {
+  const { lat = 12.9716, lng = 77.5946, type = 'police', call_id } = req.body;
+  const services = EMERGENCY_SERVICES[type] || EMERGENCY_SERVICES.police;
+  const nearest = services
+    .map(s => ({ ...s, distKm: haversineKm(lat, lng, s.lat, s.lng) }))
+    .sort((a, b) => a.distKm - b.distKm)[0];
+  const etaSeconds = Math.round((nearest.distKm / 30) * 3600);
+  console.log(`Dispatch: ${type} → ${nearest.name} (${nearest.distKm.toFixed(2)}km, ETA ${etaSeconds}s)`);
+  res.json({
+    success: true,
+    dispatch: {
+      dispatchId: 'DSP-' + Date.now(),
+      type, service: nearest, etaSeconds,
+      userLat: lat, userLng: lng, call_id,
+    }
+  });
+});
+
+// ── Nearest Services Lookup ───────────────────────────────────────────────────
+app.get('/api/nearest', (req, res) => {
+  const lat = parseFloat(req.query.lat) || 12.9716;
+  const lng = parseFloat(req.query.lng) || 77.5946;
+  const type = req.query.type || 'police';
+  const services = (EMERGENCY_SERVICES[type] || EMERGENCY_SERVICES.police)
+    .map(s => ({ ...s, distKm: haversineKm(lat, lng, s.lat, s.lng) }))
+    .sort((a, b) => a.distKm - b.distKm)
+    .slice(0, 3);
+  res.json({ type, services });
 });
 
 // Start Server
 const PORT = process.env.PORT || 8000;
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`✅ VoiceBridge Node backend running on port ${PORT}`);
 });

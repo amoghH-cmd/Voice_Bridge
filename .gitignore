@@ -14,9 +14,14 @@ __pycache__/
 *.db
 *.sqlite3
 
-# Environment Variables
+# Environment Variables (real — never commit)
 .env
 .env.local
+.env.production
+.env.development
+
+# Allow example templates (safe to commit)
+!.env.example
 
 # IDEs
 .vscode/
@@ -35,6 +40,11 @@ yarn-error.log
 uploads/
 node-backend/uploads/
 
-# Global Env Files
+# Global Env Files (real — never commit)
 **/.env
 **/.env.local
+**/.env.production
+**/.env.development
+
+# Allow example templates (safe to commit)
+!**/.env.example
