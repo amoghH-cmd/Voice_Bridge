@@ -34,7 +34,7 @@ app.get('/api/tickets', async (req, res) => {
   res.json(data);
 });
 
-// Real voice pipeline
+// Real voice pipeline — multilingual
 app.post('/api/calls/voice', upload.single('audio'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "No audio file uploaded" });
 
@@ -46,21 +46,24 @@ app.post('/api/calls/voice', upload.single('audio'), async (req, res) => {
     console.error("Could not parse history", e);
   }
 
+  const newFilePath = req.file.path + '.webm';
+
   try {
     console.log(`Received voice audio chunk for call ${call_id}...`);
-    
+
     // Rename the file to include .webm extension so Groq STT can recognize the format
     const fs = require('fs');
     const path = require('path');
-    const newFilePath = req.file.path + '.webm';
     fs.renameSync(req.file.path, newFilePath);
 
-    // 1. STT: Transcribe the audio via Whisper
-    const transcript = await transcribeAudio(newFilePath);
-    console.log("Transcription:", transcript);
+    // 1. STT: Transcribe audio — Whisper auto-detects language
+    const sttResult = await transcribeAudio(newFilePath);
+    const transcript = sttResult.text;
+    const detectedLanguage = sttResult.language; // e.g. 'kn', 'hi', 'ta', 'te', 'ml', 'en'
+    console.log(`Transcription [${detectedLanguage}]:`, transcript);
 
-    // 2. LLM: Send to Groq Llama 3 with session history
-    const analysis = await analyzeTranscript(transcript, 'en', sessionHistory);
+    // 2. LLM: Analyze with DETECTED language — enables multilingual helpline_reply
+    const analysis = await analyzeTranscript(transcript, detectedLanguage, sessionHistory);
 
     // 3. Format for Supabase
     const newTicket = {
@@ -115,7 +118,6 @@ app.post('/api/calls/voice', upload.single('audio'), async (req, res) => {
     if (req.file && fs.existsSync(req.file.path)) {
       fs.unlinkSync(req.file.path);
     }
-    const newFilePath = req.file ? req.file.path + '.webm' : null;
     if (newFilePath && fs.existsSync(newFilePath)) {
       fs.unlinkSync(newFilePath);
     }
@@ -182,37 +184,41 @@ app.post('/api/calls/simulate', async (req, res) => {
   }
 });
 
-// TTS Proxy Route (ElevenLabs API)
+// TTS Proxy Route (ElevenLabs API — Multilingual)
 app.get('/api/tts', async (req, res) => {
-  const { text } = req.query;
+  const { text, lang } = req.query;
   if (!text) return res.status(400).json({ error: "Text required" });
-  
+
   try {
-    // Sarah - Mature, Reassuring, Confident
-    const voiceId = "EXAVITQu4vr4xnSDxMaL"; 
+    // ElevenLabs eleven_turbo_v2_5 supports 30+ languages including all Indian languages.
+    // Sarah voice (EXAVITQu4vr4xnSDxMaL) — Mature, Reassuring, Confident
+    // Works natively with Kannada, Hindi, Tamil, Telugu, Malayalam, English
+    const voiceId = "EXAVITQu4vr4xnSDxMaL";
     const url = `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=mp3_44100_128`;
-    
+
     const response = await fetch(url, {
       method: 'POST',
-      headers: { 
+      headers: {
         'xi-api-key': process.env.ELEVENLABS_API_KEY,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
         text: text,
-        model_id: "eleven_turbo_v2_5",
+        model_id: "eleven_turbo_v2_5",  // Multilingual model — auto-handles Indian scripts
         voice_settings: {
-          stability: 0.5,
-          similarity_boost: 0.75
+          stability: 0.55,
+          similarity_boost: 0.75,
+          style: 0.3,
+          use_speaker_boost: true,
         }
       })
     });
-    
+
     if (!response.ok) throw new Error("ElevenLabs TTS fetch failed: " + await response.text());
-    
+
     const arrayBuffer = await response.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
-    
+
     res.set('Content-Type', 'audio/mpeg');
     res.send(buffer);
   } catch (error) {

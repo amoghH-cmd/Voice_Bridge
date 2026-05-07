@@ -62,26 +62,46 @@ export function etaSeconds(distKm) {
 
 // ── TTS: ElevenLabs → Web Speech API fallback ────────────────────────────────
 export async function playTTS(text, language = 'en', apiBase = 'http://localhost:8000') {
-  // Attempt 1: ElevenLabs proxy
+  // Attempt 1: ElevenLabs proxy (supports 30+ languages natively)
   try {
-    const audio = new Audio(`${apiBase}/api/tts?text=${encodeURIComponent(text)}`);
+    const audio = new Audio(`${apiBase}/api/tts?text=${encodeURIComponent(text)}&lang=${encodeURIComponent(language)}`);
     await new Promise((resolve, reject) => {
-      const t = setTimeout(reject, 9000);
+      // Timeout only for loading, not playback duration
+      const t = setTimeout(() => {
+        audio.pause();
+        audio.src = '';
+        reject(new Error('TTS Loading Timeout'));
+      }, 10000); 
+
+      audio.onplaying = () => { clearTimeout(t); }; // Clear timeout once it starts playing
       audio.onended = () => { clearTimeout(t); resolve(); };
-      audio.onerror = reject;
-      audio.play().catch(reject);
+      audio.onerror = (e) => { clearTimeout(t); reject(e); };
+      
+      audio.play().catch(e => { clearTimeout(t); reject(e); });
     });
     return;
-  } catch {
-    console.warn('ElevenLabs TTS failed — using Web Speech API');
+  } catch (err) {
+    console.warn('ElevenLabs TTS failed — using Web Speech API:', err.message);
   }
 
-  // Attempt 2: Browser Web Speech API
+  // Attempt 2: Browser Web Speech API — supports all Indian languages
   if (!window.speechSynthesis) return;
-  const langMap = { kn: 'kn-IN', hi: 'hi-IN', en: 'en-IN', kanglish: 'kn-IN', hinglish: 'hi-IN', unknown: 'en-IN' };
+  const langMap = {
+    kn: 'kn-IN',         // Kannada
+    hi: 'hi-IN',         // Hindi
+    en: 'en-IN',         // English (Indian accent)
+    ta: 'ta-IN',         // Tamil
+    te: 'te-IN',         // Telugu
+    ml: 'ml-IN',         // Malayalam
+    mr: 'mr-IN',         // Marathi
+    kanglish: 'kn-IN',   // Kanglish → Kannada TTS
+    hinglish: 'hi-IN',   // Hinglish → Hindi TTS
+    unknown: 'en-IN',
+  };
   const utt = new SpeechSynthesisUtterance(text);
   utt.lang = langMap[language] || 'en-IN';
-  utt.rate = 0.9; utt.pitch = 1.05;
+  utt.rate = 0.9;
+  utt.pitch = 1.05;
   await new Promise(resolve => { utt.onend = resolve; utt.onerror = resolve; window.speechSynthesis.speak(utt); });
 }
 
