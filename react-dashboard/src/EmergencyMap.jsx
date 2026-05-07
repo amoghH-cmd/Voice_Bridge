@@ -97,11 +97,17 @@ function makeUserIcon(pulse = false) {
 
 function makeVehicleIcon(type, deg) {
   const m = TYPE_META[type] || TYPE_META.police;
+  
+  // Emojis are side-profile. Rotating them makes them tumble.
+  // Instead, flip them horizontally if moving East (bearing 0 to 180 degrees)
+  const isMovingRight = deg > 0 && deg < 180;
+  const transform = isMovingRight ? 'scaleX(-1)' : 'scaleX(1)';
+  
   return L.divIcon({
     className: '',
     html: `<div style="position:relative;width:48px;height:48px;display:flex;align-items:center;justify-content:center">
       <div style="position:absolute;width:48px;height:48px;border-radius:50%;background:${m.color}33;animation:mapPulse 1s infinite"></div>
-      <div style="transform:rotate(${deg}deg);font-size:28px;z-index:1;filter:drop-shadow(0 2px 6px rgba(0,0,0,0.8))">${m.vehicle}</div>
+      <div style="transform:${transform};font-size:28px;z-index:1;filter:drop-shadow(0 2px 6px rgba(0,0,0,0.8))">${m.vehicle}</div>
     </div>`,
     iconSize: [48, 48], iconAnchor: [24, 24],
   });

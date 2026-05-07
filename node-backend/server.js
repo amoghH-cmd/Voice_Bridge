@@ -20,7 +20,7 @@ app.get('/api/health', (req, res) => {
 
 const multer = require('multer');
 const upload = multer({ dest: 'uploads/' });
-const { analyzeTranscript } = require('./services/llm');
+const { analyzeTranscript, summarizeConversation } = require('./services/llm');
 const { transcribeAudio } = require('./services/stt');
 
 // Example route to fetch tickets
@@ -122,8 +122,22 @@ app.post('/api/calls/voice', upload.single('audio'), async (req, res) => {
   }
 });
 
-// Simulate a full call pipeline
+// Summarize Call API
+app.post('/api/calls/summarize', async (req, res) => {
+  const { history } = req.body;
+  if (!history || !Array.isArray(history) || history.length === 0) {
+    return res.json({ summary: "No conversation history available to summarize." });
+  }
+  try {
+    const summary = await summarizeConversation(history);
+    res.json({ summary });
+  } catch (error) {
+    console.error("Summarize error:", error);
+    res.status(500).json({ error: "Failed to summarize conversation" });
+  }
+});
 
+// Simulate a full call pipeline
 app.post('/api/calls/simulate', async (req, res) => {
   const { transcript, phone_number, language } = req.body;
   

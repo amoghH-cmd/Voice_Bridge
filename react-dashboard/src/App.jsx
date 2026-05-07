@@ -21,6 +21,7 @@ export default function App(){
   const[callId,setCallId]=useState(null);
   const[history,setHistory]=useState([]);
   const[lastReply,setLastReply]=useState(null);
+  const[callSummary,setCallSummary]=useState(null);
   const[dispatch,setDispatch]=useState(null);
   const[userLoc,setUserLoc]=useState([12.9716,77.5946]);
   const[etaRemaining,setEtaRemaining]=useState(null);
@@ -36,14 +37,14 @@ export default function App(){
   useEffect(()=>{const t=setInterval(()=>setTime(new Date().toLocaleTimeString()),1000);return()=>clearInterval(t);},[]);
 
   useEffect(()=>{
-    navigator.geolocation?.getCurrentPosition(p=>setUserLoc([p.coords.latitude,p.coords.longitude]));
+    // Removed browser geolocation tracking, relying on AI prompt to ask user instead.
     supabase.from('tickets').select('*').order('created_at',{ascending:false}).then(({data})=>data&&setTickets(data));
     const ch=supabase.channel('public:tickets')
       .on('postgres_changes',{event:'*',schema:'public',table:'tickets'},p=>{
         if(p.eventType==='INSERT'){
           setTickets(prev=>[p.new,...prev]);
           addFeed('ticket',p.new);
-          if(p.new.status==='ESCALATED'||p.new.needs_escalation) triggerDispatch(p.new);
+          // Removed auto-dispatch on insert to prevent dispatching to a random location before AI confirms it.
         }else if(p.eventType==='UPDATE'){
           setTickets(prev=>prev.map(t=>t.id===p.new.id?p.new:t));
         }
@@ -134,9 +135,6 @@ export default function App(){
               addFeed('location',{status:'GEOCODE_FAILED',location:locationText,call_id:id});
             }
           });
-        } else if(data.dispatch_type && data.dispatch_type!=='none'){
-          // No spoken location, dispatch to GPS/current location
-          triggerDispatch({intent_category:data.ticket?.intent_category||'other',summary:data.ticket?.summary||''});
         }
         // ───────────────────────────────────────────────────────────
 
@@ -146,9 +144,26 @@ export default function App(){
     finally{setProcessing(false);}
   }
 
-  function endCall(){
+  async function endCall(){
     const id=callIdRef.current;
     setActiveCalls(prev=>prev.filter(c=>c!==id));
+    
+    const currentHistory = histRef.current;
+    if(currentHistory.length > 0) {
+      setCallSummary("Generating summary...");
+      try {
+        const res = await fetch(`${API}/api/calls/summarize`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ history: currentHistory })
+        });
+        const data = await res.json();
+        setCallSummary(data.summary);
+      } catch(e) {
+        setCallSummary("Failed to generate summary.");
+      }
+    }
+    
     callIdRef.current=null; histRef.current=[];
     setCallId(null); setHistory([]); setLastReply(null);
     if(id)addFeed('status',{status:'ENDED',call_id:id});
@@ -222,6 +237,13 @@ export default function App(){
               <span style={{fontSize:28}}>🤖</span>
               <div><div style={{color:'#38bdf8',fontWeight:600,marginBottom:4}}>Last AI Reply</div>
               <div style={{color:'#e2e8f0',lineHeight:1.6}}>{lastReply.text}</div></div>
+            </div>}
+
+            {/* Call Summary banner */}
+            {callSummary&&<div style={{background:'linear-gradient(135deg,#1e3a2f,#12241e)',border:'1px solid #2d5a44',borderRadius:12,padding:'1rem 1.5rem',marginBottom:'1.5rem',display:'flex',gap:'1rem',alignItems:'flex-start'}}>
+              <span style={{fontSize:28}}>📝</span>
+              <div><div style={{color:'#4ade80',fontWeight:600,marginBottom:4}}>Call Summary</div>
+              <div style={{color:'#e2e8f0',lineHeight:1.6}}>{callSummary}</div></div>
             </div>}
 
             <div className="two-col">

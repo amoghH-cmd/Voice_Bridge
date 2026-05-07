@@ -32,4 +32,28 @@ async function analyzeTranscript(transcript, language = 'en', history = []) {
   }
 }
 
-module.exports = { analyzeTranscript };
+async function summarizeConversation(history) {
+  let historyText = history.map(t => `[${t.role.toUpperCase()}]: ${t.text}`).join('\n');
+  const prompt = `You are a professional emergency dispatcher analyst.
+Below is the transcript of an emergency call between a caller and the AI dispatcher.
+Summarize the emergency issue, the location (if provided), the action taken, and any key details.
+Format the summary as a clear, concise text paragraph (max 3 sentences). Do not use JSON.
+
+TRANSCRIPT:
+${historyText}`;
+
+  try {
+    const response = await groq.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.3,
+      max_tokens: 256,
+    });
+    return response.choices[0].message.content.trim();
+  } catch (error) {
+    console.error("Groq Summary Error:", error);
+    return "Failed to generate summary.";
+  }
+}
+
+module.exports = { analyzeTranscript, summarizeConversation };
